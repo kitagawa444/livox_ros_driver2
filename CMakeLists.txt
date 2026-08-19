@@ -1,4 +1,21 @@
-# judge which cmake codes to use 
+# Detect the active ROS environment so a plain `colcon build` selects the
+# ROS 2 branch without requiring the wrapper script's CMake arguments.
+if(NOT DEFINED ROS_EDITION OR ROS_EDITION STREQUAL "")
+  if("$ENV{ROS_VERSION}" STREQUAL "1")
+    set(ROS_EDITION ROS1)
+  else()
+    set(ROS_EDITION ROS2)
+  endif()
+endif()
+
+if((NOT DEFINED DISTRO_ROS OR DISTRO_ROS STREQUAL "") AND
+   NOT "$ENV{ROS_DISTRO}" STREQUAL "")
+  set(DISTRO_ROS "$ENV{ROS_DISTRO}")
+endif()
+
+message(STATUS "Building for ${ROS_EDITION} (${DISTRO_ROS})")
+
+# judge which cmake codes to use
 if(ROS_EDITION STREQUAL "ROS1")
 
   # Copyright(c) 2019 livoxtech limited.
@@ -228,6 +245,22 @@ else(ROS_EDITION STREQUAL "ROS2")
   find_package(builtin_interfaces REQUIRED)
   find_package(rosidl_default_generators REQUIRED)
 
+  # Build the SDK as part of this package so a separate system-wide
+  # Livox-SDK2 installation is not required for a colcon build. Pinning the
+  # release keeps builds reproducible while FetchContent provides proper CMake
+  # target dependencies and installs the SDK libraries with this package.
+  include(FetchContent)
+  FetchContent_Declare(
+    livox_sdk2
+    GIT_REPOSITORY https://github.com/Livox-SDK/Livox-SDK2.git
+    # Matching Livox-SDK2 revision for driver 1.2.7 (Avia2/MID360s and
+    # double-echo API support).
+    GIT_TAG 08f523c930b2f0ba1e98a6afaa8d7476bf479908
+    GIT_SHALLOW TRUE
+    UPDATE_DISCONNECTED TRUE
+  )
+  FetchContent_MakeAvailable(livox_sdk2)
+
   # check apr
   find_package(PkgConfig)
   pkg_check_modules(APR apr-1)
@@ -244,14 +277,6 @@ else(ROS_EDITION STREQUAL "ROS2")
     DEPENDENCIES builtin_interfaces std_msgs
     LIBRARY_NAME ${PROJECT_NAME}
   )
-
-  ## make sure the livox_lidar_sdk_shared library is installed
-  find_library(LIVOX_LIDAR_SDK_LIBRARY liblivox_lidar_sdk_shared.so /usr/local/lib REQUIRED)
-
-  ##
-  find_path(LIVOX_LIDAR_SDK_INCLUDE_DIR
-    NAMES "livox_lidar_api.h" "livox_lidar_def.h"
-    REQUIRED)
 
   ## PCL library
   link_directories(${PCL_LIBRARY_DIRS})
@@ -279,8 +304,6 @@ else(ROS_EDITION STREQUAL "ROS2")
     src/call_back/livox_lidar_callback.cpp
   )
 
-  target_include_directories(${PROJECT_NAME} PRIVATE ${livox_sdk_INCLUDE_DIRS})
-
   # get include directories of custom msg headers
   if(DISTRO_ROS STREQUAL "humble" OR DISTRO_ROS STREQUAL "jazzy")
     rosidl_get_typesupport_target(cpp_typesupport_target
@@ -296,7 +319,6 @@ else(ROS_EDITION STREQUAL "ROS2")
   target_include_directories(${PROJECT_NAME} PUBLIC
     ${PCL_INCLUDE_DIRS}
     ${APR_INCLUDE_DIRS}
-    ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
     ${LIVOX_INTERFACES_INCLUDE_DIRECTORIES}   # for custom msgs
     3rdparty
     src
@@ -304,7 +326,7 @@ else(ROS_EDITION STREQUAL "ROS2")
 
   # link libraries
   target_link_libraries(${PROJECT_NAME}
-    ${LIVOX_LIDAR_SDK_LIBRARY}
+    livox_lidar_sdk_shared
     ${LIVOX_INTERFACE_TARGET}   # for custom msgs
     ${PPT_LIBRARY}
     ${Boost_LIBRARY}

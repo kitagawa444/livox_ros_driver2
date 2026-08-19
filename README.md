@@ -79,6 +79,14 @@ source /opt/ros/humble/setup.sh
 ./build.sh humble
 ```
 
+The ROS2 package can also be built directly from the workspace root. On the
+first configure, CMake downloads and builds the matching Livox-SDK2 revision:
+
+```shell
+source /opt/ros/humble/setup.sh
+colcon build --packages-select livox_ros_driver2
+```
+
 #### For ROS2 Jazzy:
 
 ```shell
