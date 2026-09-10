@@ -1,6 +1,8 @@
 import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 import launch
 
@@ -25,7 +27,7 @@ livox_ros2_params = [
     {"data_src": data_src},
     {"publish_freq": publish_freq},
     {"output_data_type": output_type},
-    {"frame_id": frame_id},
+    {"frame_id": LaunchConfiguration('frame_id')},
     {"lvx_file_path": lvx_file_path},
     {"user_config_path": user_config_path},
     {"cmdline_input_bd_code": cmdline_bd_code}
@@ -37,11 +39,18 @@ def generate_launch_description():
         package='livox_ros_driver2',
         executable='livox_ros_driver2_node',
         name='livox_lidar_publisher',
+        namespace=LaunchConfiguration('robot_ns'),
         output='screen',
         parameters=livox_ros2_params
         )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'robot_ns', default_value='',
+            description='Namespace for the Livox driver and published topics'),
+        DeclareLaunchArgument(
+            'frame_id', default_value=frame_id,
+            description='Frame id for Livox point cloud and IMU messages'),
         livox_driver,
         # launch.actions.RegisterEventHandler(
         #     event_handler=launch.event_handlers.OnProcessExit(
